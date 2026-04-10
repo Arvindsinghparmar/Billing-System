@@ -1,0 +1,80 @@
+@page "/customers/add"
+@page "/customers/edit/{Id}"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+@inject NavigationManager Nav
+
+<PageTitle>@(Id == null ? "Add Customer" : "Edit Customer") - Billing System</PageTitle>
+
+<div class="d-flex align-items-center mb-4">
+    <a href="/customers" class="btn btn-outline-secondary me-3">← Back</a>
+    <h2 class="mb-0">@(Id == null ? "➕ Add Customer" : "✏️ Edit Customer")</h2>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <EditForm Model="customer" OnValidSubmit="Save">
+                    <DataAnnotationsValidator />
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Customer Name *</label>
+                            <InputText class="form-control" @bind-Value="customer.Name" placeholder="Full Name" />
+                            <ValidationMessage For="() => customer.Name" class="text-danger small" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone *</label>
+                            <InputText class="form-control" @bind-Value="customer.Phone" placeholder="10-digit mobile" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <InputText class="form-control" @bind-Value="customer.Email" placeholder="email@example.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">GST Number</label>
+                            <InputText class="form-control" @bind-Value="customer.GSTNumber" placeholder="22AAAAA0000A1Z5" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Address</label>
+                            <InputTextArea class="form-control" @bind-Value="customer.Address" rows="2" placeholder="Full address" />
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch mt-4">
+                                <InputCheckbox class="form-check-input" @bind-Value="customer.IsActive" id="isActive" />
+                                <label class="form-check-label" for="isActive">Active</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary px-4">💾 Save Customer</button>
+                        <a href="/customers" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    private Customer customer = new();
+
+    protected override void OnInitialized()
+    {
+        if (Id != null)
+        {
+            customer = DS.GetCustomer(Id) ?? new Customer();
+        }
+    }
+
+    private void Save()
+    {
+        DS.SaveCustomer(customer);
+        Nav.NavigateTo("/customers");
+    }
+}

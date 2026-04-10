@@ -1,0 +1,122 @@
+@page "/settings"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+
+<PageTitle>Settings - Billing System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">⚙️ Company Settings</h2>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                @if (saved)
+                {
+                    <div class="alert alert-success py-2">✅ Settings saved successfully!</div>
+                }
+
+                <h6 class="text-muted text-uppercase small mb-3">Company Information</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-8">
+                        <label class="form-label">Company Name *</label>
+                        <input class="form-control" @bind="settings.CompanyName" placeholder="Your Business Name" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Owner Name</label>
+                        <input class="form-control" @bind="settings.OwnerName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control" @bind="settings.Phone" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" @bind="settings.Email" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Address</label>
+                        <input class="form-control" @bind="settings.Address" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">City</label>
+                        <input class="form-control" @bind="settings.City" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">State</label>
+                        <input class="form-control" @bind="settings.State" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Pin Code</label>
+                        <input class="form-control" @bind="settings.PinCode" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">GST Number</label>
+                        <input class="form-control" @bind="settings.GSTNumber" placeholder="GSTIN" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">PAN</label>
+                        <input class="form-control" @bind="settings.PAN" />
+                    </div>
+                </div>
+
+                <hr />
+                <h6 class="text-muted text-uppercase small mb-3">Bank Details</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Bank Name</label>
+                        <input class="form-control" @bind="settings.BankName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Account Number</label>
+                        <input class="form-control" @bind="settings.AccountNumber" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">IFSC Code</label>
+                        <input class="form-control" @bind="settings.IFSC" />
+                    </div>
+                </div>
+
+                <hr />
+                <h6 class="text-muted text-uppercase small mb-3">Invoice Settings</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label">Invoice Prefix</label>
+                        <input class="form-control" @bind="settings.InvoicePrefix" placeholder="INV" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Next Invoice Number</label>
+                        <input type="number" class="form-control" @bind="settings.NextInvoiceNumber" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Default Terms & Conditions</label>
+                    <textarea class="form-control" rows="3" @bind="settings.TermsAndConditions"></textarea>
+                </div>
+
+                <button class="btn btn-primary px-4" @onclick="Save">💾 Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private CompanySettings settings = new();
+    private bool saved = false;
+
+    protected override void OnInitialized()
+    {
+        settings = DS.GetSettings();
+    }
+
+    private async Task Save()
+    {
+        DS.SaveSettings(settings);
+        saved = true;
+        await Task.Delay(3000);
+        saved = false;
+    }
+}

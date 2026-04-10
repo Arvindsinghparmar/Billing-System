@@ -1,0 +1,161 @@
+@page "/"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+
+<PageTitle>Dashboard - Billing System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📊 Dashboard</h2>
+    <span class="text-muted">@DateTime.Now.ToString("dd MMM yyyy")</span>
+</div>
+
+@if (stats != null)
+{
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #0d6efd!important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="text-muted small mb-1">Total Revenue</p>
+                            <h4 class="fw-bold text-primary">₹@stats.TotalRevenue.ToString("N2")</h4>
+                        </div>
+                        <span class="fs-2">💰</span>
+                    </div>
+                    <small class="text-muted">This month: ₹@stats.ThisMonthRevenue.ToString("N2")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #198754!important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="text-muted small mb-1">Collected</p>
+                            <h4 class="fw-bold text-success">₹@stats.TotalCollected.ToString("N2")</h4>
+                        </div>
+                        <span class="fs-2">✅</span>
+                    </div>
+                    <small class="text-muted">@stats.TotalInvoices Total Invoices</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #dc3545!important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="text-muted small mb-1">Pending Amount</p>
+                            <h4 class="fw-bold text-danger">₹@stats.PendingAmount.ToString("N2")</h4>
+                        </div>
+                        <span class="fs-2">⏳</span>
+                    </div>
+                    <small class="text-danger">@stats.OverdueInvoices overdue invoices</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #6f42c1!important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="text-muted small mb-1">Customers</p>
+                            <h4 class="fw-bold text-purple">@stats.TotalCustomers</h4>
+                        </div>
+                        <span class="fs-2">👥</span>
+                    </div>
+                    <small class="text-muted">@stats.TotalProducts Products</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">Quick Actions</h6>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="/invoices/create" class="btn btn-primary">🧾 New Invoice</a>
+                        <a href="/customers/add" class="btn btn-outline-success">👤 Add Customer</a>
+                        <a href="/products/add" class="btn btn-outline-info">📦 Add Product</a>
+                        <a href="/payments" class="btn btn-outline-warning">💳 Record Payment</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Invoices -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Recent Invoices</h6>
+                <a href="/invoices" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (stats.RecentInvoices.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Customer</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var inv in stats.RecentInvoices)
+                            {
+                                <tr>
+                                    <td><strong>@inv.InvoiceNumber</strong></td>
+                                    <td>@inv.CustomerName</td>
+                                    <td>@inv.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                    <td>₹@inv.GrandTotal.ToString("N2")</td>
+                                    <td>
+                                        <span class="badge @GetStatusClass(inv.Status)">@inv.Status</span>
+                                    </td>
+                                    <td>
+                                        <a href="/invoices/@inv.Id" class="btn btn-sm btn-outline-primary">View</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-4 text-muted">
+                    <p>No invoices yet. <a href="/invoices/create">Create your first invoice</a></p>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardStats? stats;
+
+    protected override void OnInitialized()
+    {
+        stats = DS.GetDashboardStats();
+    }
+
+    private string GetStatusClass(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.Paid => "bg-success",
+        InvoiceStatus.PartiallyPaid => "bg-warning text-dark",
+        InvoiceStatus.Cancelled => "bg-secondary",
+        _ => "bg-danger"
+    };
+}

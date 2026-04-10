@@ -1,0 +1,139 @@
+@page "/payments"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+
+<PageTitle>Payments - Billing System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">💰 Payment Ledger</h2>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm bg-success text-white">
+            <div class="card-body">
+                <p class="mb-1 opacity-75">Total Collected</p>
+                <h4 class="fw-bold">₹@payments.Sum(p => p.Amount).ToString("N2")</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm bg-primary text-white">
+            <div class="card-body">
+                <p class="mb-1 opacity-75">This Month</p>
+                <h4 class="fw-bold">₹@payments.Where(p => p.PaymentDate.Month == DateTime.Now.Month && p.PaymentDate.Year == DateTime.Now.Year).Sum(p => p.Amount).ToString("N2")</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm bg-info text-white">
+            <div class="card-body">
+                <p class="mb-1 opacity-75">Total Transactions</p>
+                <h4 class="fw-bold">@payments.Count</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-md-5">
+                <input class="form-control" placeholder="🔍 Search customer, invoice..." @bind="search" @bind:event="oninput" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" @bind="methodFilter">
+                    <option value="">All Methods</option>
+                    @foreach (var m in Enum.GetValues<PaymentMethod>())
+                    {
+                        <option value="@m">@m</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="month" class="form-control" value="@monthFilter" @onchange="OnMonthChanged" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!filteredPayments.Any())
+{
+    <div class="text-center py-5 text-muted">
+        <div class="fs-1">💰</div>
+        <p>No payments recorded yet.</p>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Invoice #</th>
+                            <th>Customer</th>
+                            <th>Method</th>
+                            <th>Reference</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in filteredPayments.OrderByDescending(x => x.PaymentDate))
+                        {
+                            <tr>
+                                <td>@p.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td><a href="/invoices/@p.InvoiceId">@p.InvoiceNumber</a></td>
+                                <td>@p.CustomerName</td>
+                                <td>
+                                    <span class="badge bg-light text-dark">@p.Method</span>
+                                </td>
+                                <td>@p.Reference</td>
+                                <td class="text-end text-success fw-bold">₹@p.Amount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="5" class="text-end fw-bold">Total:</td>
+                            <td class="text-end fw-bold text-success">₹@filteredPayments.Sum(p => p.Amount).ToString("N2")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Payment> payments = new();
+    private string search = "";
+    private string methodFilter = "";
+    private string monthFilter = "";
+
+    private List<Payment> filteredPayments
+    {
+        get
+        {
+            var q = payments.AsEnumerable();
+            if (!string.IsNullOrEmpty(search))
+                q = q.Where(p => p.CustomerName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                                 p.InvoiceNumber.Contains(search, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(methodFilter))
+                q = q.Where(p => p.Method.ToString() == methodFilter);
+            if (!string.IsNullOrEmpty(monthFilter) && DateTime.TryParse(monthFilter + "-01", out var m))
+                q = q.Where(p => p.PaymentDate.Month == m.Month && p.PaymentDate.Year == m.Year);
+            return q.ToList();
+        }
+    }
+
+    protected override void OnInitialized() => payments = DS.GetPayments();
+
+    private void OnMonthChanged(ChangeEventArgs e) => monthFilter = e.Value?.ToString() ?? string.Empty;
+}

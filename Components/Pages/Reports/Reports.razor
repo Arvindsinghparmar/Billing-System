@@ -1,0 +1,213 @@
+@page "/reports"
+@rendermode InteractiveServer
+@using System.Globalization
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+
+<PageTitle>Reports - Billing System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📈 Reports</h2>
+    <div class="d-flex gap-2 align-items-center">
+        <input type="month" class="form-control" value="@selectedMonth" @onchange="OnMonthChanged" />
+        <button class="btn btn-outline-primary" @onclick="LoadAllTime">All Time</button>
+    </div>
+</div>
+
+<!-- Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Total Invoices</div>
+            <div class="fs-3 fw-bold text-primary">@filteredInvoices.Count</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Total Billed</div>
+            <div class="fs-3 fw-bold text-primary">₹@(filteredInvoices.Sum(i => i.GrandTotal))</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Collected</div>
+            <div class="fs-3 fw-bold text-success">
+                ₹@filteredPayments.Sum(p => p.Amount)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Pending</div>
+            <div class="fs-3 fw-bold text-danger">₹@filteredInvoices.Where(i => i.Status != InvoiceStatus.Paid && i.Status != InvoiceStatus.Cancelled).Sum(i => i.BalanceDue).ToString("N0")</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Invoice Status Breakdown -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white"><h6 class="mb-0">Invoice Status Breakdown</h6></div>
+            <div class="card-body">
+                @{
+                    var paid = filteredInvoices.Count(i => i.Status == InvoiceStatus.Paid);
+                    var partial = filteredInvoices.Count(i => i.Status == InvoiceStatus.PartiallyPaid);
+                    var unpaid = filteredInvoices.Count(i => i.Status == InvoiceStatus.Unpaid);
+                    var cancelled = filteredInvoices.Count(i => i.Status == InvoiceStatus.Cancelled);
+                    var total = filteredInvoices.Count;
+                }
+                @if (total > 0)
+                {
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>✅ Paid (@paid)</span>
+                            <strong>₹@filteredInvoices.Where(i => i.Status == InvoiceStatus.Paid).Sum(i => i.GrandTotal).ToString("N0")</strong>
+                        </div>
+                        <div class="progress mb-3" style="height:8px">
+                            <div class="progress-bar bg-success" style="width:@(total > 0 ? paid * 100 / total : 0)%"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>🟡 Partially Paid (@partial)</span>
+                            <strong>₹@filteredInvoices.Where(i => i.Status == InvoiceStatus.PartiallyPaid).Sum(i => i.GrandTotal).ToString("N0")</strong>
+                        </div>
+                        <div class="progress mb-3" style="height:8px">
+                            <div class="progress-bar bg-warning" style="width:@(total > 0 ? partial * 100 / total : 0)%"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>🔴 Unpaid (@unpaid)</span>
+                            <strong>₹@filteredInvoices.Where(i => i.Status == InvoiceStatus.Unpaid).Sum(i => i.GrandTotal).ToString("N0")</strong>
+                        </div>
+                        <div class="progress mb-3" style="height:8px">
+                            <div class="progress-bar bg-danger" style="width:@(total > 0 ? unpaid * 100 / total : 0)%"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>⬛ Cancelled (@cancelled)</span>
+                            <span></span>
+                        </div>
+                        <div class="progress" style="height:8px">
+                            <div class="progress-bar bg-secondary" style="width:@(total > 0 ? cancelled * 100 / total : 0)%"></div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted text-center py-3">No invoices in this period</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Method Breakdown -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white"><h6 class="mb-0">Payment Methods</h6></div>
+            <div class="card-body">
+                @if (filteredPayments.Any())
+                {
+                    @foreach (var grp in filteredPayments.GroupBy(p => p.Method).OrderByDescending(g => g.Sum(p => p.Amount)))
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>@grp.Key (@grp.Count() times)</span>
+                            <strong class="text-success">₹@grp.Sum(p => p.Amount).ToString("N2")</strong>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted text-center py-3">No payments in this period</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white"><h6 class="mb-0">Top Customers by Revenue</h6></div>
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                    <thead class="table-light">
+                        <tr><th>#</th><th>Customer</th><th>Invoices</th><th>Total Billed</th><th>Collected</th><th>Balance</th></tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var customerGroups = filteredInvoices
+                                .GroupBy(i => i.CustomerName)
+                                .Select(g => new { Name = g.Key, Count = g.Count(), Total = g.Sum(i => i.GrandTotal), Balance = g.Sum(i => i.BalanceDue) })
+                                .OrderByDescending(g => g.Total)
+                                .Take(10);
+                        }
+                        @foreach (var (grp, i) in customerGroups.Select((g, i) => (g, i + 1)))
+                        {
+                            var collected = grp.Total - grp.Balance;
+                            <tr>
+                                <td>@i</td>
+                                <td><strong>@grp.Name</strong></td>
+                                <td>@grp.Count</td>
+                                <td>₹@grp.Total.ToString("N2")</td>
+                                <td class="text-success">₹@collected.ToString("N2")</td>
+                                <td class="@(grp.Balance > 0 ? "text-danger" : "text-success")">₹@grp.Balance.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Invoice> allInvoices = new();
+    private List<Payment> allPayments = new();
+    private string selectedMonth = DateTime.Now.ToString("yyyy-MM");
+    private bool allTime = false;
+
+    private List<Invoice> filteredInvoices
+    {
+        get
+        {
+            if (allTime) return allInvoices;
+            if (DateTime.TryParse(selectedMonth + "-01", out var m))
+                return allInvoices.Where(i => i.InvoiceDate.Month == m.Month && i.InvoiceDate.Year == m.Year).ToList();
+            return allInvoices;
+        }
+    }
+
+    private List<Payment> filteredPayments
+    {
+        get
+        {
+            if (allTime) return allPayments;
+            if (DateTime.TryParse(selectedMonth + "-01", out var m))
+                return allPayments.Where(p => p.PaymentDate.Month == m.Month && p.PaymentDate.Year == m.Year).ToList();
+            return allPayments;
+        }
+    }
+
+    protected override void OnInitialized() => LoadReport();
+
+    private void OnMonthChanged(ChangeEventArgs e)
+    {
+        selectedMonth = e.Value?.ToString() ?? string.Empty;
+        allTime = false;
+        LoadReport();
+    }
+
+    private void LoadReport()
+    {
+        allTime = false;
+        allInvoices = DS.GetInvoices();
+        allPayments = DS.GetPayments();
+    }
+
+    private void LoadAllTime()
+    {
+        allTime = true;
+        allInvoices = DS.GetInvoices();
+        allPayments = DS.GetPayments();
+    }
+}

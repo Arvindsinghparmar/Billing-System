@@ -1,0 +1,132 @@
+@page "/products"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+
+<PageTitle>Products - Billing System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📦 Products / Services</h2>
+    <a href="/products/add" class="btn btn-primary">+ Add Product</a>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <input class="form-control" placeholder="🔍 Search by name, category, HSN..." @bind="searchText" @bind:event="oninput" />
+    </div>
+</div>
+
+@if (!filteredProducts.Any())
+{
+    <div class="text-center py-5 text-muted">
+        <div class="fs-1">📦</div>
+        <p>No products found. <a href="/products/add">Add your first product</a></p>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>HSN</th>
+                            <th>Unit</th>
+                            <th>Price (₹)</th>
+                            <th>GST %</th>
+                            <th>Stock</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (p, i) in filteredProducts.Select((p, i) => (p, i + 1)))
+                        {
+                            <tr class="@(p.Stock <= 5 && p.Stock > 0 ? "table-warning" : p.Stock == 0 ? "table-danger" : "")">
+                                <td>@i</td>
+                                <td>
+                                    <strong>@p.Name</strong>
+                                    @if (!string.IsNullOrEmpty(p.Description))
+                                    {
+                                        <br /><small class="text-muted">@p.Description</small>
+                                    }
+                                </td>
+                                <td><span class="badge bg-light text-dark">@p.Category</span></td>
+                                <td>@p.HSNCode</td>
+                                <td>@p.Unit</td>
+                                <td class="fw-bold">@p.Price.ToString("N2")</td>
+                                <td>@p.GSTPercent%</td>
+                                <td>
+                                    @if (p.Stock == 0)
+                                    {
+                                        <span class="text-danger fw-bold">Out of stock</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@p.Stock</span>
+                                    }
+                                </td>
+                                <td>
+                                    <a href="/products/edit/@p.Id" class="btn btn-sm btn-outline-primary me-1">Edit</a>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(p)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="text-muted small mt-2">Showing @filteredProducts.Count of @products.Count products</div>
+}
+
+@if (deleteTarget != null)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                </div>
+                <div class="modal-body">
+                    Delete <strong>@deleteTarget.Name</strong>?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => deleteTarget = null">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DoDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Product> products = new();
+    private string searchText = "";
+    private Product? deleteTarget;
+
+    private List<Product> filteredProducts => products
+        .Where(p => string.IsNullOrEmpty(searchText) ||
+                    p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    p.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    p.HSNCode.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(p => p.Name).ToList();
+
+    protected override void OnInitialized() => products = DS.GetProducts();
+
+    private void ConfirmDelete(Product p) => deleteTarget = p;
+
+    private void DoDelete()
+    {
+        if (deleteTarget != null)
+        {
+            DS.DeleteProduct(deleteTarget.Id);
+            products = DS.GetProducts();
+            deleteTarget = null;
+        }
+    }
+}

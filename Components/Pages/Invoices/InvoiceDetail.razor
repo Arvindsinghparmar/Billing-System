@@ -1,0 +1,318 @@
+@page "/invoices/{Id}"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+@inject IJSRuntime JS
+
+<PageTitle>Invoice @invoice?.InvoiceNumber - Billing System</PageTitle>
+
+@if (invoice == null)
+{
+    <div class="text-center py-5"><p class="text-muted">Invoice not found.</p></div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <div class="d-flex align-items-center">
+            <a href="/invoices" class="btn btn-outline-secondary me-3">← Back</a>
+            <h2 class="mb-0">Invoice @invoice.InvoiceNumber</h2>
+            <span class="badge @GetStatusClass(invoice.Status) ms-3 fs-6">@invoice.Status</span>
+        </div>
+        <div class="d-flex gap-2">
+            @if (invoice.Status != InvoiceStatus.Paid && invoice.Status != InvoiceStatus.Cancelled)
+            {
+                <button class="btn btn-success" @onclick="() => showPayModal = true">💳 Record Payment</button>
+            }
+            <button class="btn btn-outline-primary" @onclick="PrintInvoice">🖨️ Print</button>
+        </div>
+    </div>
+
+    <!-- Invoice Print View -->
+    <div class="card border-0 shadow-sm" id="invoicePrint">
+        <div class="card-body p-4">
+            <!-- Header -->
+            <div class="row mb-4">
+                <div class="col-6">
+                    <h3 class="fw-bold text-primary">@settings.CompanyName</h3>
+                    <p class="mb-0">@settings.Address</p>
+                    <p class="mb-0">@settings.City, @settings.State @settings.PinCode</p>
+                    <p class="mb-0">📞 @settings.Phone</p>
+                    @if (!string.IsNullOrEmpty(settings.GSTNumber))
+                    {
+                        <p class="mb-0"><strong>GSTIN:</strong> @settings.GSTNumber</p>
+                    }
+                </div>
+                <div class="col-6 text-end">
+                    <h2 class="text-muted">TAX INVOICE</h2>
+                    <table class="ms-auto" style="min-width:200px">
+                        <tr><td class="text-muted pe-3">Invoice No:</td><td><strong>@invoice.InvoiceNumber</strong></td></tr>
+                        <tr><td class="text-muted pe-3">Date:</td><td>@invoice.InvoiceDate.ToString("dd/MM/yyyy")</td></tr>
+                        <tr><td class="text-muted pe-3">Due Date:</td><td>@invoice.DueDate.ToString("dd/MM/yyyy")</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- Bill To -->
+            <div class="row mb-4">
+                <div class="col-6">
+                    <h6 class="text-muted text-uppercase small mb-2">Bill To</h6>
+                    <strong class="fs-5">@invoice.CustomerName</strong>
+                    @if (!string.IsNullOrEmpty(invoice.CustomerPhone))
+                    {
+                        <p class="mb-0">📞 @invoice.CustomerPhone</p>
+                    }
+                    @if (!string.IsNullOrEmpty(invoice.CustomerAddress))
+                    {
+                        <p class="mb-0">@invoice.CustomerAddress</p>
+                    }
+                    @if (!string.IsNullOrEmpty(invoice.CustomerGST))
+                    {
+                        <p class="mb-0"><strong>GSTIN:</strong> @invoice.CustomerGST</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Product / Service</th>
+                            <th>HSN</th>
+                            <th>Unit</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Rate</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Taxable</th>
+                            <th class="text-center">GST%</th>
+                            <th class="text-end">GST Amt</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (item, i) in invoice.Items.Select((x, i) => (x, i + 1)))
+                        {
+                            <tr>
+                                <td>@i</td>
+                                <td>@item.ProductName</td>
+                                <td>@item.HSNCode</td>
+                                <td>@item.Unit</td>
+                                <td class="text-end">@item.Quantity</td>
+                                <td class="text-end">@item.UnitPrice.ToString("N2")</td>
+                                <td class="text-end">@(item.Discount > 0 ? item.Discount.ToString("N2") : "-")</td>
+                                <td class="text-end">@item.TaxableAmount.ToString("N2")</td>
+                                <td class="text-center">@item.GSTPercent%</td>
+                                <td class="text-end">@item.GSTAmount.ToString("N2")</td>
+                                <td class="text-end fw-bold">@item.TotalAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-light">
+                            <td colspan="7" class="text-end fw-bold">Sub Total:</td>
+                            <td class="text-end fw-bold">@invoice.SubTotal.ToString("N2")</td>
+                            <td></td>
+                            <td class="text-end fw-bold">@invoice.TotalGST.ToString("N2")</td>
+                            <td class="text-end fw-bold">@invoice.GrandTotal.ToString("N2")</td>
+                        </tr>
+                        @if (invoice.PaidAmount > 0)
+                        {
+                            <tr class="table-success">
+                                <td colspan="10" class="text-end">Amount Paid:</td>
+                                <td class="text-end text-success fw-bold">@invoice.PaidAmount.ToString("N2")</td>
+                            </tr>
+                            <tr class="@(invoice.BalanceDue > 0 ? "table-danger" : "table-success")">
+                                <td colspan="10" class="text-end fw-bold">Balance Due:</td>
+                                <td class="text-end fw-bold">@invoice.BalanceDue.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Footer -->
+            <div class="row">
+                <div class="col-6">
+                    @if (!string.IsNullOrEmpty(settings.BankName))
+                    {
+                        <h6 class="text-muted small text-uppercase mb-1">Bank Details</h6>
+                        <p class="mb-0 small">Bank: @settings.BankName</p>
+                        <p class="mb-0 small">A/C: @settings.AccountNumber</p>
+                        <p class="mb-0 small">IFSC: @settings.IFSC</p>
+                    }
+                    @if (!string.IsNullOrEmpty(invoice.Notes))
+                    {
+                        <div class="mt-2">
+                            <h6 class="text-muted small text-uppercase mb-1">Notes</h6>
+                            <p class="small mb-0">@invoice.Notes</p>
+                        </div>
+                    }
+                </div>
+                <div class="col-6 text-end">
+                    <div class="mt-5 pt-3 border-top" style="width:200px;margin-left:auto">
+                        <p class="mb-0 small">Authorised Signatory</p>
+                        <strong>@settings.CompanyName</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment History -->
+    @if (payments.Any())
+    {
+        <div class="card border-0 shadow-sm mt-3 no-print">
+            <div class="card-header bg-white"><h6 class="mb-0">💳 Payment History</h6></div>
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th><th>Method</th><th>Reference</th><th>Amount</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var pay in payments)
+                        {
+                            <tr>
+                                <td>@pay.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td>@pay.Method</td>
+                                <td>@pay.Reference</td>
+                                <td class="text-success fw-bold">₹@pay.Amount.ToString("N2")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePayment(pay.Id)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+<!-- Payment Modal -->
+@if (showPayModal && invoice != null)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">💳 Record Payment</h5>
+                    <button class="btn-close" @onclick="() => showPayModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2">
+                        Balance Due: <strong>₹@invoice.BalanceDue.ToString("N2")</strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Amount (₹) *</label>
+                        <input type="number" class="form-control" @bind="newPay.Amount" step="0.01" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Payment Method</label>
+                        <select class="form-select" @bind="newPay.Method">
+                            @foreach (var m in Enum.GetValues<PaymentMethod>())
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reference / Transaction ID</label>
+                        <input class="form-control" @bind="newPay.Reference" placeholder="UPI ID, cheque no..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Payment Date</label>
+                        <input type="date" class="form-control"
+                               value="@newPay.PaymentDate.ToString("yyyy-MM-dd")"
+                               @onchange="e => newPay.PaymentDate = DateTime.Parse(e.Value!.ToString()!)" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(payError))
+                    {
+                        <div class="alert alert-danger py-2">@payError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showPayModal = false">Cancel</button>
+                    <button class="btn btn-success" @onclick="SavePayment">Save Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    @@media print {
+        .no-print { display: none !important; }
+        .card { box-shadow: none !important; border: none !important; }
+    }
+</style>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    private Invoice? invoice;
+    private CompanySettings settings = new();
+    private List<Payment> payments = new();
+    private bool showPayModal;
+    private Payment newPay = new();
+    private string payError = "";
+
+    protected override void OnInitialized()
+    {
+        settings = DS.GetSettings();
+        LoadData();
+    }
+
+    private void LoadData()
+    {
+        invoice = DS.GetInvoice(Id);
+        if (invoice != null)
+        {
+            payments = DS.GetPaymentsForInvoice(invoice.Id);
+            newPay = new Payment
+            {
+                InvoiceId = invoice.Id,
+                InvoiceNumber = invoice.InvoiceNumber,
+                CustomerId = invoice.CustomerId,
+                CustomerName = invoice.CustomerName,
+                Amount = invoice.BalanceDue
+            };
+        }
+    }
+
+    private void SavePayment()
+    {
+        payError = "";
+        if (newPay.Amount <= 0)
+        {
+            payError = "Enter a valid amount.";
+            return;
+        }
+        DS.SavePayment(newPay);
+        showPayModal = false;
+        LoadData();
+    }
+
+    private void DeletePayment(string payId)
+    {
+        DS.DeletePayment(payId);
+        LoadData();
+    }
+
+    private async Task PrintInvoice()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private string GetStatusClass(InvoiceStatus s) => s switch
+    {
+        InvoiceStatus.Paid => "bg-success",
+        InvoiceStatus.PartiallyPaid => "bg-warning text-dark",
+        InvoiceStatus.Cancelled => "bg-secondary",
+        _ => "bg-danger"
+    };
+}

@@ -1,0 +1,175 @@
+@page "/invoices"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+
+<PageTitle>Invoices - Billing System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">🧾 Invoices</h2>
+    <a href="/invoices/create" class="btn btn-primary">+ New Invoice</a>
+</div>
+
+<!-- Filters -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <input class="form-control" placeholder="🔍 Search invoice no., customer..." @bind="searchText" @bind:event="oninput" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" @bind="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="Unpaid">Unpaid</option>
+                    <option value="PartiallyPaid">Partially Paid</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="month" class="form-control" value="@monthFilter" @onchange="OnMonthChanged" />
+            </div>
+            <div class="col-md-2 text-end">
+                <span class="badge bg-primary fs-6">Total: ₹@filteredInvoices.Sum(i => i.GrandTotal).ToString("N0")</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!filteredInvoices.Any())
+{
+    <div class="text-center py-5 text-muted">
+        <div class="fs-1">🧾</div>
+        <p>No invoices found. <a href="/invoices/create">Create your first invoice</a></p>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Due Date</th>
+                            <th>Amount</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inv in filteredInvoices.OrderByDescending(i => i.InvoiceDate))
+                        {
+                            var isOverdue = inv.DueDate < DateTime.Today && inv.Status != InvoiceStatus.Paid && inv.Status != InvoiceStatus.Cancelled;
+                            <tr class="@(isOverdue ? "table-danger" : "")">
+                                <td><strong>@inv.InvoiceNumber</strong></td>
+                                <td>
+                                    @inv.CustomerName
+                                    @if (!string.IsNullOrEmpty(inv.CustomerPhone))
+                                    {
+                                        <br /><small class="text-muted">@inv.CustomerPhone</small>
+                                    }
+                                </td>
+                                <td>@inv.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                <td class="@(isOverdue ? "text-danger fw-bold" : "")">@inv.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td>₹@inv.GrandTotal.ToString("N2")</td>
+                                <td class="@(inv.BalanceDue > 0 ? "text-danger" : "text-success")">
+                                    ₹@inv.BalanceDue.ToString("N2")
+                                </td>
+                                <td><span class="badge @GetStatusClass(inv.Status)">@GetStatusLabel(inv.Status)</span></td>
+                                <td>
+                                    <a href="/invoices/@inv.Id" class="btn btn-sm btn-outline-primary me-1">View</a>
+                                    @if (inv.Status != InvoiceStatus.Cancelled && inv.Status != InvoiceStatus.Paid)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(inv)">Cancel</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="text-muted small mt-2">Showing @filteredInvoices.Count invoices</div>
+}
+
+@if (deleteTarget != null)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Cancel Invoice?</h5></div>
+                <div class="modal-body">Cancel invoice <strong>@deleteTarget.InvoiceNumber</strong>?</div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => deleteTarget = null">No</button>
+                    <button class="btn btn-danger" @onclick="DoCancelInvoice">Yes, Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Invoice> invoices = new();
+    private string searchText = "";
+    private string statusFilter = "";
+    private string monthFilter = "";
+    private Invoice? deleteTarget;
+
+    private List<Invoice> filteredInvoices
+    {
+        get
+        {
+            var q = invoices.AsEnumerable();
+            if (!string.IsNullOrEmpty(searchText))
+                q = q.Where(i => i.InvoiceNumber.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                                 i.CustomerName.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(statusFilter))
+                q = q.Where(i => i.Status.ToString() == statusFilter);
+            if (!string.IsNullOrEmpty(monthFilter) && DateTime.TryParse(monthFilter + "-01", out var m))
+                q = q.Where(i => i.InvoiceDate.Month == m.Month && i.InvoiceDate.Year == m.Year);
+            return q.ToList();
+        }
+    }
+
+    protected override void OnInitialized() => invoices = DS.GetInvoices();
+
+    private void OnMonthChanged(ChangeEventArgs e) => monthFilter = e.Value?.ToString() ?? string.Empty;
+
+    private void ConfirmDelete(Invoice inv) => deleteTarget = inv;
+
+    private void DoCancelInvoice()
+    {
+        if (deleteTarget != null)
+        {
+            var full = DS.GetInvoice(deleteTarget.Id);
+            if (full != null)
+            {
+                full.Status = InvoiceStatus.Cancelled;
+                DS.UpdateInvoice(full);
+            }
+            invoices = DS.GetInvoices();
+            deleteTarget = null;
+        }
+    }
+
+    private string GetStatusClass(InvoiceStatus s) => s switch
+    {
+        InvoiceStatus.Paid => "bg-success",
+        InvoiceStatus.PartiallyPaid => "bg-warning text-dark",
+        InvoiceStatus.Cancelled => "bg-secondary",
+        _ => "bg-danger"
+    };
+
+    private string GetStatusLabel(InvoiceStatus s) => s switch
+    {
+        InvoiceStatus.PartiallyPaid => "Partial",
+        _ => s.ToString()
+    };
+}

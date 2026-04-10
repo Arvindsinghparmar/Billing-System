@@ -1,0 +1,242 @@
+@page "/invoices/create"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+@inject NavigationManager Nav
+
+<PageTitle>Create Invoice - Billing System</PageTitle>
+
+<div class="d-flex align-items-center mb-4">
+    <a href="/invoices" class="btn btn-outline-secondary me-3">← Back</a>
+    <h2 class="mb-0">🧾 Create New Invoice</h2>
+</div>
+
+<div class="row g-3">
+    <!-- Left: Invoice Details -->
+    <div class="col-lg-8">
+        <!-- Customer -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white"><h6 class="mb-0">Customer Details</h6></div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Select Customer</label>
+                        <select class="form-select" @onchange="OnCustomerSelected">
+                            <option value="">-- Walk-in / Manual --</option>
+                            @foreach (var c in customers)
+                            {
+                                <option value="@c.Id">@c.Name (@c.Phone)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Customer Name *</label>
+                        <input class="form-control" @bind="invoice.CustomerName" placeholder="Name" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control" @bind="invoice.CustomerPhone" placeholder="Phone" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">GST No.</label>
+                        <input class="form-control" @bind="invoice.CustomerGST" placeholder="GSTIN" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Address</label>
+                        <textarea class="form-control" rows="2" @bind="invoice.CustomerAddress"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Items -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Items</h6>
+                <button class="btn btn-sm btn-outline-primary" @onclick="AddItem">+ Add Item</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th style="width:80px">Qty</th>
+                                <th style="width:110px">Price (₹)</th>
+                                <th style="width:90px">Disc (₹)</th>
+                                <th style="width:70px">GST%</th>
+                                <th style="width:110px">Total (₹)</th>
+                                <th style="width:40px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (item, idx) in invoice.Items.Select((x, i) => (x, i)))
+                            {
+                                <tr>
+                                    <td>
+                                        <select class="form-select form-select-sm" @onchange="e => OnProductSelected(e, item)">
+                                            <option value="">-- Custom --</option>
+                                            @foreach (var p in products)
+                                            {
+                                                <option value="@p.Id" selected="@(item.ProductId == p.Id)">@p.Name</option>
+                                            }
+                                        </select>
+                                        <input class="form-control form-control-sm mt-1" @bind="item.ProductName" placeholder="Product name" />
+                                    </td>
+                                    <td><input type="number" class="form-control form-control-sm" @bind="item.Quantity" min="1" /></td>
+                                    <td><input type="number" class="form-control form-control-sm" @bind="item.UnitPrice" step="0.01" /></td>
+                                    <td><input type="number" class="form-control form-control-sm" @bind="item.Discount" step="0.01" /></td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="item.GSTPercent">
+                                            <option value="0">0%</option>
+                                            <option value="5">5%</option>
+                                            <option value="12">12%</option>
+                                            <option value="18">18%</option>
+                                            <option value="28">28%</option>
+                                        </select>
+                                    </td>
+                                    <td class="text-end fw-bold">@item.TotalAmount.ToString("N2")</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveItem(item)">✕</button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!invoice.Items.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-3">
+                                        Click "+ Add Item" to add products
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <label class="form-label">Notes / Terms</label>
+                <textarea class="form-control" rows="2" @bind="invoice.Notes" placeholder="Payment terms, notes..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Summary -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm sticky-top" style="top: 20px;">
+            <div class="card-header bg-white"><h6 class="mb-0">Invoice Summary</h6></div>
+            <div class="card-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small">Invoice Date</label>
+                        <input type="date" class="form-control form-control-sm"
+                               value="@invoice.InvoiceDate.ToString("yyyy-MM-dd")"
+                               @onchange="e => invoice.InvoiceDate = DateTime.Parse(e.Value!.ToString()!)" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Due Date</label>
+                        <input type="date" class="form-control form-control-sm"
+                               value="@invoice.DueDate.ToString("yyyy-MM-dd")"
+                               @onchange="e => invoice.DueDate = DateTime.Parse(e.Value!.ToString()!)" />
+                    </div>
+                </div>
+
+                <hr />
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Sub Total</span><strong>₹@invoice.SubTotal.ToString("N2")</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1 text-muted">
+                    <span>GST</span><span>₹@invoice.TotalGST.ToString("N2")</span>
+                </div>
+                <hr />
+                <div class="d-flex justify-content-between mb-3">
+                    <span class="fs-5 fw-bold">Grand Total</span>
+                    <span class="fs-5 fw-bold text-primary">₹@invoice.GrandTotal.ToString("N2")</span>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMsg))
+                {
+                    <div class="alert alert-danger py-2">@errorMsg</div>
+                }
+
+                <button class="btn btn-primary w-100 mb-2" @onclick="SaveInvoice">
+                    💾 Save Invoice
+                </button>
+                <a href="/invoices" class="btn btn-outline-secondary w-100">Cancel</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Invoice invoice = new();
+    private List<Customer> customers = new();
+    private List<Product> products = new();
+    private string errorMsg = "";
+
+    protected override void OnInitialized()
+    {
+        customers = DS.GetCustomers().Where(c => c.IsActive).ToList();
+        products = DS.GetProducts().Where(p => p.IsActive).ToList();
+        invoice.Notes = DS.GetSettings().TermsAndConditions;
+        AddItem();
+    }
+
+    private void OnCustomerSelected(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+        var c = customers.FirstOrDefault(x => x.Id == id);
+        if (c != null)
+        {
+            invoice.CustomerId = c.Id;
+            invoice.CustomerName = c.Name;
+            invoice.CustomerPhone = c.Phone;
+            invoice.CustomerAddress = c.Address;
+            invoice.CustomerGST = c.GSTNumber;
+        }
+    }
+
+    private void OnProductSelected(ChangeEventArgs e, InvoiceItem item)
+    {
+        var id = e.Value?.ToString();
+        var p = products.FirstOrDefault(x => x.Id == id);
+        if (p != null)
+        {
+            item.ProductId = p.Id;
+            item.ProductName = p.Name;
+            item.HSNCode = p.HSNCode;
+            item.Unit = p.Unit;
+            item.UnitPrice = p.Price;
+            item.GSTPercent = p.GSTPercent;
+            item.Quantity = 1;
+        }
+    }
+
+    private void AddItem() => invoice.Items.Add(new InvoiceItem { Quantity = 1 });
+
+    private void RemoveItem(InvoiceItem item) => invoice.Items.Remove(item);
+
+    private void SaveInvoice()
+    {
+        errorMsg = "";
+        if (string.IsNullOrWhiteSpace(invoice.CustomerName))
+        {
+            errorMsg = "Customer name is required.";
+            return;
+        }
+        if (!invoice.Items.Any() || invoice.Items.All(i => i.Quantity == 0))
+        {
+            errorMsg = "Add at least one item.";
+            return;
+        }
+        // Remove empty rows
+        invoice.Items.RemoveAll(i => string.IsNullOrEmpty(i.ProductName) && i.UnitPrice == 0);
+
+        DS.CreateInvoice(invoice);
+        Nav.NavigateTo($"/invoices/{invoice.Id}");
+    }
+}

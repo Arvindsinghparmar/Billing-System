@@ -1,0 +1,110 @@
+@page "/products/add"
+@page "/products/edit/{Id}"
+@rendermode InteractiveServer
+@using BillingSystem.Services
+@using BillingSystem.Models
+@inject DataService DS
+@inject NavigationManager Nav
+
+<PageTitle>@(Id == null ? "Add Product" : "Edit Product") - Billing System</PageTitle>
+
+<div class="d-flex align-items-center mb-4">
+    <a href="/products" class="btn btn-outline-secondary me-3">← Back</a>
+    <h2 class="mb-0">@(Id == null ? "➕ Add Product" : "✏️ Edit Product")</h2>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <EditForm Model="product" OnValidSubmit="Save">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Product / Service Name *</label>
+                            <InputText class="form-control" @bind-Value="product.Name" placeholder="e.g. LED Bulb 9W" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Category</label>
+                            <InputText class="form-control" @bind-Value="product.Category" placeholder="e.g. Electronics" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <InputTextArea class="form-control" @bind-Value="product.Description" rows="2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">HSN Code</label>
+                            <InputText class="form-control" @bind-Value="product.HSNCode" placeholder="e.g. 8539" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Unit</label>
+                            <InputSelect class="form-select" @bind-Value="product.Unit">
+                                <option>Pcs</option>
+                                <option>Kg</option>
+                                <option>Ltr</option>
+                                <option>Mtr</option>
+                                <option>Box</option>
+                                <option>Set</option>
+                                <option>Pair</option>
+                                <option>Nos</option>
+                                <option>Hrs</option>
+                                <option>Service</option>
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Stock Quantity</label>
+                            <InputNumber class="form-control" @bind-Value="product.Stock" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Selling Price (₹) *</label>
+                            <InputNumber class="form-control" @bind-Value="product.Price" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">GST %</label>
+                            <InputSelect class="form-select" @bind-Value="product.GSTPercent">
+                                <option value="0">0% (Exempt)</option>
+                                <option value="5">5%</option>
+                                <option value="12">12%</option>
+                                <option value="18">18%</option>
+                                <option value="28">28%</option>
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="card bg-light border-0 p-2 w-100">
+                                <small class="text-muted">Price with GST</small>
+                                <strong>₹@((product.Price + product.Price * product.GSTPercent / 100).ToString("N2"))</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch mt-4">
+                                <InputCheckbox class="form-check-input" @bind-Value="product.IsActive" id="isActive" />
+                                <label class="form-check-label" for="isActive">Active</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary px-4">💾 Save Product</button>
+                        <a href="/products" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    private Product product = new();
+
+    protected override void OnInitialized()
+    {
+        if (Id != null)
+            product = DS.GetProduct(Id) ?? new Product();
+    }
+
+    private void Save()
+    {
+        DS.SaveProduct(product);
+        Nav.NavigateTo("/products");
+    }
+}
